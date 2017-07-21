@@ -54,6 +54,8 @@ public class CameraHandler extends HandlerThread {
     private int mFlash;
     private SurfaceHolder holder;
     private boolean setAfterOrientationInit;
+    private boolean pendingStartPreview;
+    private AtomicBoolean isOpenCamera = new AtomicBoolean(false);
 
 
     public CameraHandler(Callback callback) {
@@ -61,12 +63,17 @@ public class CameraHandler extends HandlerThread {
         this.callback = callback;
     }
 
-    public void performCommand(int command){
-        if(!isPrepared){
-            Log.e(TAG,"camera thread didn't prepared");
+    public void removeCallback() {
+        this.callback = null;
+    }
+
+    public void performCommand(int command) {
+        if (!isPrepared) {
+            Log.e(TAG, "camera thread didn't prepared");
+            pendingStartPreview = true;
             return;
         }
-        Log.d(TAG,"performCommand "+command);
+        Log.d(TAG, "performCommand " + command);
         handler.sendEmptyMessage(command);
     }
 
@@ -99,29 +106,33 @@ public class CameraHandler extends HandlerThread {
             }
 
         };
+        if (pendingStartPreview) {
+            startCamera();
+            pendingStartPreview = false;
+        }
     }
 
     private void quitInternal() {
         releaseCamera();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
             quitSafely();
-        }else{
+        } else {
             quit();
         }
     }
 
     private void cameraStartPreview() {
-        if(camera == null) {
+        if (camera == null) {
             return;
         }
-        if(holder == null) {
-            Log.e(TAG,"holder not set,preview error");
+        if (holder == null) {
+            Log.e(TAG, "holder not set,preview error");
             return;
         }
 
         try {
             camera.setPreviewDisplay(holder);
-            if(setAfterOrientationInit) {
+            if (setAfterOrientationInit) {
                 setDisplayOrientation(mDisplayOrientation);
                 setAfterOrientationInit = false;
             }
@@ -137,14 +148,14 @@ public class CameraHandler extends HandlerThread {
     }
 
     public void switchFacing() {
-        if(isCameraNotOpened()){
-            Log.e(TAG,"switchFacing camera is not opened");
+        if (isCameraNotOpened()) {
+            Log.e(TAG, "switchFacing camera is not opened");
             return;
         }
 
-        if(mFacing == Camera.CameraInfo.CAMERA_FACING_FRONT){
+        if (mFacing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
             mFacing = Camera.CameraInfo.CAMERA_FACING_BACK;
-        }else{
+        } else {
             mFacing = Camera.CameraInfo.CAMERA_FACING_FRONT;
         }
 
@@ -153,44 +164,56 @@ public class CameraHandler extends HandlerThread {
     }
 
     private void startCamera() {
-        if (camera != null) {
-            releaseCamera();
-        }
+        if (!isOpenCamera.getAndSet(true)) {
 
-        chooseCamera();
-        if(mCameraId == INVALID_CAMERA_ID){
-            Log.e(TAG,"no camera choose ");
-            return;
-        }
+            Log.d(TAG, "opening camera...");
+            if (camera != null) {
+                releaseCamera();
+            }
 
-        try{
-            camera = Camera.open(mCameraId);
-            if(holder == null){
-                Log.e(TAG, "open camera error: surfaceholder is null");
+            chooseCamera();
+
+            if (mCameraId == INVALID_CAMERA_ID) {
+                Log.e(TAG, "no camera choose ");
+                isOpenCamera.set(false);
                 return;
             }
-            camera.setPreviewDisplay(holder);
-            mCameraParameters = camera.getParameters();
-            adjustCameraParameters();
-            camera.setDisplayOrientation(calcCameraRotation(mDisplayOrientation));
-            cameraStartPreview();
-            Log.d(TAG, "camera opened");
-            callback.onCameraOpened();
-        }catch (Exception e){
-            Log.e(TAG, "can't open camera");
+
+            try {
+                camera = Camera.open(mCameraId);
+                if (holder == null) {
+                    Log.e(TAG, "open camera error: surfaceholder is null");
+                    isOpenCamera.set(false);
+                    return;
+                }
+                camera.setPreviewDisplay(holder);
+                mCameraParameters = camera.getParameters();
+                adjustCameraParameters();
+                camera.setDisplayOrientation(calcCameraRotation(mDisplayOrientation));
+                cameraStartPreview();
+                Log.d(TAG, "camera opened");
+                if (callback != null)
+                    callback.onCameraOpened();
+            } catch (Exception e) {
+                Log.e(TAG, "can't open camera");
+            } finally {
+                isOpenCamera.set(false);
+            }
         }
     }
 
     private void releaseCamera() {
         handler.removeCallbacksAndMessages(null);
-        if(camera!=null) {
+        if (camera != null) {
+            Log.d(TAG,"releasing camera...");
             camera.setPreviewCallback(null);
             camera.stopPreview();
             camera.release();
             camera = null;
         }
         Log.d(TAG, "camera closed");
-        callback.onCameraClosed();
+        if (callback != null)
+            callback.onCameraClosed();
     }
 
     private void adjustCameraParameters() {
@@ -254,17 +277,19 @@ public class CameraHandler extends HandlerThread {
         mCameraId = INVALID_CAMERA_ID;
     }
 
-    public void stopCameraAndQuit(){
-        setSurfaceHolder(null);
-        performCommand(MSG_STOP);
+    public void stopCameraAndQuit() {
+        Log.d(TAG, "stopCameraAndQuit");
+        this.holder = null;
+        this.callback = null;
+        performCommand(MSG_QUIT);
     }
 
     void takePicture() {
-        if(isCameraNotOpened()){
-            Log.e(TAG,"takePicture not inited.");
+        if (isCameraNotOpened()) {
+            Log.e(TAG, "takePicture not inited.");
             return;
         }
-        if(canAutoFocus()){
+        if (canAutoFocus()) {
             camera.cancelAutoFocus();
             camera.autoFocus(new Camera.AutoFocusCallback() {
                 @Override
@@ -283,8 +308,9 @@ public class CameraHandler extends HandlerThread {
                 @Override
                 public void onPictureTaken(byte[] data, Camera camera) {
                     isPictureCaptureInProgress.set(false);
-                    Log.d(TAG,"takePictureInternal");
-                    callback.onPictureTaken(data);
+                    Log.d(TAG, "takePictureInternal");
+                    if (callback != null)
+                        callback.onPictureTaken(data);
                     camera.cancelAutoFocus();
                     camera.startPreview();
                 }
@@ -304,16 +330,19 @@ public class CameraHandler extends HandlerThread {
         return camera == null;
     }
 
-    public void startOpenCamera() {
-        performCommand(CameraHandler.MSG_START);
+    public void startOpenCamera(SurfaceHolder holder) {
+        if (isCameraNotOpened()) {
+            setSurfaceHolder(holder);
+            performCommand(CameraHandler.MSG_START);
+        }
     }
 
     private int calcCameraRotation(int rotation) {
         if (mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-            Log.d(TAG,"calcCameraRotation CAMERA_FACING_FRONT");
+            Log.d(TAG, "calcCameraRotation CAMERA_FACING_FRONT");
             return (360 - (mCameraInfo.orientation + rotation) % 360) % 360;
         } else {  // back-facing
-            Log.d(TAG,"calcCameraRotation CAMERA_FACING_BACK");
+            Log.d(TAG, "calcCameraRotation CAMERA_FACING_BACK");
             return (mCameraInfo.orientation - rotation + 360) % 360;
         }
     }
@@ -325,7 +354,7 @@ public class CameraHandler extends HandlerThread {
         }
         mDisplayOrientation = displayOrientation;
         if (isCameraNotOpened()) {
-            Log.d(TAG,"isCameraNotOpened");
+            Log.d(TAG, "isCameraNotOpened");
             return false;
         }
         int cameraRotation = calcCameraRotation(displayOrientation);
@@ -336,11 +365,15 @@ public class CameraHandler extends HandlerThread {
     }
 
     public void stopCamera() {
+        if (isCameraNotOpened()) {
+            return;
+        }
         performCommand(MSG_STOP);
     }
 
     public interface Callback {
         void onCameraClosed();
+
         void onCameraOpened();
 
         void onPictureTaken(byte[] data);

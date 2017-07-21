@@ -56,17 +56,20 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
     }
 
     public void start(){
-        cameraHandler.startOpenCamera();
+        Log.d(TAG,"start");
+        cameraHandler.startOpenCamera(getHolder());
     }
 
     public void quit(){
-        Log.d(TAG,"stopCamera");
+        Log.d(TAG,"quit");
         holder.removeCallback(this);
         cameraHandler.stopCameraAndQuit();
     }
 
     public void stop(){
-        cameraHandler.stopCamera();
+        Log.d(TAG,"stop");
+        if(cameraHandler!=null)
+            cameraHandler.stopCamera();
     }
 
     public void setCallback(Callback callback){
@@ -80,7 +83,10 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
         Log.d(TAG,"surfaceCreated");
-        cameraHandler.setSurfaceHolder(holder);
+        if(cameraHandler!=null) {
+            cameraHandler.setSurfaceHolder(holder);
+            cameraHandler.startOpenCamera(holder);
+        }
     }
 
     @Override
@@ -90,7 +96,7 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.d(TAG,"surfaceDestroyed");
+        Log.d(TAG,"surfaceDestroyed camera stop");
         stop();
     }
 
@@ -117,7 +123,7 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
     public void setVisibility(int visibility) {
         super.setVisibility(visibility);
         if(visibility == GONE|| visibility == INVISIBLE){
-            Log.d(TAG,"setVisibility not visible");
+            Log.d(TAG,"setVisibility not visible camera stop");
             stop();
         }else{
             Log.d(TAG,"setVisibility visible");
@@ -132,7 +138,6 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
             mDisplayOrientationDetector.removeListener();
             mDisplayOrientationDetector = null;
         }
-        cameraHandler.stopCameraAndQuit();
     }
 
 

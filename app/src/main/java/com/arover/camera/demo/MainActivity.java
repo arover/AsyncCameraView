@@ -3,6 +3,8 @@ package com.arover.camera.demo;
 import android.Manifest;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.view.View;
 import android.widget.FrameLayout;
 
@@ -17,15 +19,20 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout previewSurface;
 
     private CameraView mCamearView;
+    private RecyclerView mListView;
+    private DemoAdapter mAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        previewSurface = (FrameLayout) findViewById(R.id.previewSurface);
+//        previewSurface = (FrameLayout) findViewById(R.id.previewSurface);
+        mListView = (RecyclerView) findViewById(R.id.list);
+        mAdapter = new DemoAdapter(this);
+        mListView.setLayoutManager(new LinearLayoutManager(this));
+        mListView.setAdapter(mAdapter);
 
-        mCamearView = new CameraView(this);
-        previewSurface.addView(mCamearView);
+//        previewSurface.addView(mCamearView);
         new RxPermissions(this)
                 .request(Manifest.permission.CAMERA)
                 .subscribe(new Observer<Boolean>() {
@@ -57,29 +64,36 @@ public class MainActivity extends AppCompatActivity {
     public void onClick(View view){
         switch (view.getId()){
             case R.id.switchFacingBtn:
-                mCamearView.switchFacing();
+//                mCamearView.switchFacing();
                 break;
             case R.id.shutterBtn:
-                mCamearView.takePicture();
+//                mCamearView.takePicture();
+                break;
+            case R.id.VisibleBtn:
+                if(mListView.getVisibility() == View.VISIBLE){
+                    mListView.setVisibility(View.GONE);
+                }else{
+                    mListView.setVisibility(View.VISIBLE);
+                }
                 break;
         }
     }
     @Override
     protected void onResume() {
         super.onResume();
-        mCamearView.start();
+//        mCamearView.start();
     }
 
     @Override
     protected void onPause() {
-        mCamearView.stop();
+//        mCamearView.stop();
         super.onPause();
     }
 
 
     @Override
     protected void onDestroy() {
-        mCamearView.quit();
+//        mCamearView.quit();
         super.onDestroy();
     }
 }

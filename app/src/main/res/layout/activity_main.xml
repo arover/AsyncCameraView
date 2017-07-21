@@ -1,42 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     tools:context="com.arover.camera.demo.MainActivity">
 
-    <FrameLayout
-        android:id="@+id/previewSurface"
+    <!--<FrameLayout-->
+    <!--android:id="@+id/previewSurface"-->
+    <!--android:layout_width="match_parent"-->
+    <!--android:layout_height="match_parent"/>-->
+    <android.support.v7.widget.RecyclerView
+        android:id="@+id/list"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"/>
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal|bottom"
         android:orientation="horizontal">
 
         <Button
             android:id="@+id/shutterBtn"
-            android:onClick="onClick"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Take Picture"/>
+            android:onClick="onClick"
+            android:text="Capture"/>
 
         <Button
             android:id="@+id/switchFacingBtn"
-            android:onClick="onClick"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Switch Facing"/>
+            android:onClick="onClick"
+            android:text="Facing"/>
 
         <Button
             android:id="@+id/flashBtn"
-            android:onClick="onClick"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Flash "/>
+            android:onClick="onClick"
+            android:text="Flash"/>
+
+        <Button
+            android:id="@+id/VisibleBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:onClick="onClick"
+            android:text="Visible"/>
     </LinearLayout>
-</FrameLayout>
+</LinearLayout>
