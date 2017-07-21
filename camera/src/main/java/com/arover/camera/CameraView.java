@@ -30,19 +30,6 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
         init(context);
     }
 
-    private void init(Context context) {
-        holder = getHolder();
-        holder.addCallback(this);
-        cameraHandler = new CameraHandler(this);
-        cameraHandler.start();
-        mDisplayOrientationDetector = new DisplayOrientationDetector(context) {
-            @Override
-            public void onDisplayOrientationChanged(int displayOrientation) {
-                cameraHandler.setDisplayOrientation(displayOrientation);
-            }
-        };
-    }
-
     public CameraView(Context context, AttributeSet attrs) {
         super(context, attrs);
         init(context);
@@ -60,6 +47,28 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
         init(context);
     }
 
+    public void switchFacing() {
+        cameraHandler.switchFacing();
+    }
+
+    public void takePicture() {
+        cameraHandler.takePicture();
+    }
+
+    public void start(){
+        cameraHandler.startOpenCamera();
+    }
+
+    public void quit(){
+        Log.d(TAG,"stopCamera");
+        holder.removeCallback(this);
+        cameraHandler.stopCameraAndQuit();
+    }
+
+    public void stop(){
+        cameraHandler.stopCamera();
+    }
+
     public void setCallback(Callback callback){
         mCallback = callback;
     }
@@ -69,15 +78,9 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
     }
 
     @Override
-    protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
-        cameraHandler.stopCameraAndQuit();
-    }
-
-    @Override
     public void surfaceCreated(SurfaceHolder holder) {
         Log.d(TAG,"surfaceCreated");
-        cameraHandler.startOpenCamera();
+        cameraHandler.setSurfaceHolder(holder);
     }
 
     @Override
@@ -88,20 +91,13 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
         Log.d(TAG,"surfaceDestroyed");
-        releaseCamera();
-    }
-
-    private void releaseCamera() {
-        Log.d(TAG,"releaseCamera");
-        holder.removeCallback(this);
-        cameraHandler.stopCameraAndQuit();
+        stop();
     }
 
     @Override
     public void onCameraOpened() {
         Log.d(TAG,"onCameraOpened");
         cameraHandler.setSurfaceHolder(getHolder());
-        cameraHandler.startCameraPreview();
     }
 
     @Override
@@ -117,19 +113,40 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
         }
     }
 
-    public void switchFacing() {
-        cameraHandler.switchFacing();
+    @Override
+    public void setVisibility(int visibility) {
+        super.setVisibility(visibility);
+        if(visibility == GONE|| visibility == INVISIBLE){
+            Log.d(TAG,"setVisibility not visible");
+            stop();
+        }else{
+            Log.d(TAG,"setVisibility visible");
+//            start();
+        }
     }
 
-    public void takePicture() {
-        cameraHandler.takePicture();
-    }
-    public void start(){
-        cameraHandler.setSurfaceHolder(getHolder());
-        cameraHandler.startCameraPreview();
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        if(mDisplayOrientationDetector!=null) {
+            mDisplayOrientationDetector.removeListener();
+            mDisplayOrientationDetector = null;
+        }
+        cameraHandler.stopCameraAndQuit();
     }
 
-    public void stop(){
-        releaseCamera();
+
+    private void init(Context context) {
+        holder = getHolder();
+        holder.addCallback(this);
+        cameraHandler = new CameraHandler(this);
+        cameraHandler.start();
+        mDisplayOrientationDetector = new DisplayOrientationDetector(context) {
+
+            @Override
+            public void onDisplayOrientationChanged(int displayOrientation) {
+                cameraHandler.setDisplayOrientation(displayOrientation);
+            }
+        };
     }
 }

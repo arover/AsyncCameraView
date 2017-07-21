@@ -67,12 +67,19 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-//        mCamearView.start();
+        mCamearView.start();
     }
 
     @Override
     protected void onPause() {
-//        mCamearView.stop();
+        mCamearView.stop();
         super.onPause();
+    }
+
+
+    @Override
+    protected void onDestroy() {
+        mCamearView.quit();
+        super.onDestroy();
     }
 }

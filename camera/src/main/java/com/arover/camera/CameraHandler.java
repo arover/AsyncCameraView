@@ -32,11 +32,12 @@ public class CameraHandler extends HandlerThread {
         FLASH_MODES.put(Config.FLASH_RED_EYE, Camera.Parameters.FLASH_MODE_RED_EYE);
     }
 
-    public static final int MSG_OPEN = 1;
+    private static final int MSG_START = 1;
     private static final int MSG_STOP = 2;
     private static final int MSG_CAPTURE = 3;
     private static final int MSG_SWITCH_FACING = 4;
-    private static final int MSG_START_PREVIEW = 5;
+    private static final int MSG_QUIT = 5;
+
     private Callback callback;
     private final Camera.CameraInfo mCameraInfo = new Camera.CameraInfo();
 
@@ -51,6 +52,8 @@ public class CameraHandler extends HandlerThread {
     private int INVALID_CAMERA_ID = -1;
     private int mDisplayOrientation;
     private int mFlash;
+    private SurfaceHolder holder;
+    private boolean setAfterOrientationInit;
 
 
     public CameraHandler(Callback callback) {
@@ -77,14 +80,14 @@ public class CameraHandler extends HandlerThread {
             public void handleMessage(Message msg) {
                 super.handleMessage(msg);
                 switch (msg.what) {
-                    case MSG_OPEN:
-                        openCamera();
-                        break;
-                    case MSG_START_PREVIEW:
-                        cameraStartPreview();
+                    case MSG_START:
+                        startCamera();
                         break;
                     case MSG_STOP:
-                        stopCamera();
+                        releaseCamera();
+                        break;
+                    case MSG_QUIT:
+                        quitInternal();
                         break;
                     case MSG_CAPTURE:
                         takePicture();
@@ -98,23 +101,39 @@ public class CameraHandler extends HandlerThread {
         };
     }
 
+    private void quitInternal() {
+        releaseCamera();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+            quitSafely();
+        }else{
+            quit();
+        }
+    }
+
     private void cameraStartPreview() {
-        if(camera!=null) {
+        if(camera == null) {
+            return;
+        }
+        if(holder == null) {
+            Log.e(TAG,"holder not set,preview error");
+            return;
+        }
+
+        try {
+            camera.setPreviewDisplay(holder);
+            if(setAfterOrientationInit) {
+                setDisplayOrientation(mDisplayOrientation);
+                setAfterOrientationInit = false;
+            }
             camera.startPreview();
+        } catch (IOException e) {
+            Log.e(TAG, "setSurfaceHolder", e);
         }
     }
 
 
     public void setSurfaceHolder(SurfaceHolder holder) {
-        if (camera != null) {
-            try {
-                camera.setPreviewDisplay(holder);
-            } catch (IOException e) {
-                Log.e(TAG, "setSurfaceHolder", e);
-            }
-        } else {
-            Log.e(TAG, "camera not inited");
-        }
+        this.holder = holder;
     }
 
     public void switchFacing() {
@@ -129,13 +148,13 @@ public class CameraHandler extends HandlerThread {
             mFacing = Camera.CameraInfo.CAMERA_FACING_FRONT;
         }
 
-        stopCamera();
-        openCamera();
+        releaseCamera();
+        startCamera();
     }
 
-    private void openCamera() {
+    private void startCamera() {
         if (camera != null) {
-            stopCamera();
+            releaseCamera();
         }
 
         chooseCamera();
@@ -146,13 +165,32 @@ public class CameraHandler extends HandlerThread {
 
         try{
             camera = Camera.open(mCameraId);
+            if(holder == null){
+                Log.e(TAG, "open camera error: surfaceholder is null");
+                return;
+            }
+            camera.setPreviewDisplay(holder);
             mCameraParameters = camera.getParameters();
             adjustCameraParameters();
             camera.setDisplayOrientation(calcCameraRotation(mDisplayOrientation));
+            cameraStartPreview();
+            Log.d(TAG, "camera opened");
             callback.onCameraOpened();
         }catch (Exception e){
             Log.e(TAG, "can't open camera");
         }
+    }
+
+    private void releaseCamera() {
+        handler.removeCallbacksAndMessages(null);
+        if(camera!=null) {
+            camera.setPreviewCallback(null);
+            camera.stopPreview();
+            camera.release();
+            camera = null;
+        }
+        Log.d(TAG, "camera closed");
+        callback.onCameraClosed();
     }
 
     private void adjustCameraParameters() {
@@ -217,13 +255,8 @@ public class CameraHandler extends HandlerThread {
     }
 
     public void stopCameraAndQuit(){
-        handler.removeCallbacksAndMessages(null);
-        stopCamera();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-            quitSafely();
-        }else{
-            quit();
-        }
+        setSurfaceHolder(null);
+        performCommand(MSG_STOP);
     }
 
     void takePicture() {
@@ -271,22 +304,8 @@ public class CameraHandler extends HandlerThread {
         return camera == null;
     }
 
-    public void stopCamera() {
-        if(camera!=null) {
-            camera.setPreviewCallback(null);
-            camera.stopPreview();
-            camera.release();
-            camera = null;
-        }
-        callback.onCameraClosed();
-    }
-
     public void startOpenCamera() {
-        performCommand(CameraHandler.MSG_OPEN);
-    }
-
-    public void startCameraPreview() {
-        performCommand(CameraHandler.MSG_START_PREVIEW);
+        performCommand(CameraHandler.MSG_START);
     }
 
     private int calcCameraRotation(int rotation) {
@@ -299,20 +318,25 @@ public class CameraHandler extends HandlerThread {
         }
     }
 
-    public void setDisplayOrientation(int displayOrientation) {
+    public boolean setDisplayOrientation(int displayOrientation) {
 
         if (mDisplayOrientation == displayOrientation) {
-            return;
+            return true;
         }
         mDisplayOrientation = displayOrientation;
         if (isCameraNotOpened()) {
             Log.d(TAG,"isCameraNotOpened");
-            return;
+            return false;
         }
         int cameraRotation = calcCameraRotation(displayOrientation);
         mCameraParameters.setRotation(cameraRotation);
         camera.setParameters(mCameraParameters);
         camera.setDisplayOrientation(cameraRotation);
+        return true;
+    }
+
+    public void stopCamera() {
+        performCommand(MSG_STOP);
     }
 
     public interface Callback {
