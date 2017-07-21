@@ -83,10 +83,9 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
         Log.d(TAG,"surfaceCreated");
-        if(cameraHandler!=null) {
-            cameraHandler.setSurfaceHolder(holder);
-            cameraHandler.startOpenCamera(holder);
-        }
+        cameraHandler.setSurfaceHolder(holder);
+        cameraHandler.startOpenCamera(holder);
+
     }
 
     @Override

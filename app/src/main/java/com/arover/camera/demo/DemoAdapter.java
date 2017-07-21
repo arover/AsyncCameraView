@@ -39,6 +39,7 @@ class DemoAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>{
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
         if(viewType == TYPE_CAMERA){
+            Log.d(TAG, "onCreateViewHolder  camera");
             return new CameraViewHolder(mInflater.inflate(R.layout.li_camera, parent,false));
         }
         return new TextViewHolder(mInflater.inflate(R.layout.li_text, parent, false));

@@ -166,11 +166,14 @@ public class CameraHandler extends HandlerThread {
     private void startCamera() {
         if (!isOpenCamera.getAndSet(true)) {
 
-            Log.d(TAG, "opening camera...");
             if (camera != null) {
-                releaseCamera();
+                Log.d(TAG, "camera opened ,return;");
+                isOpenCamera.set(false);
+                return;
+//                releaseCamera();
             }
 
+            Log.d(TAG, "opening camera...");
             chooseCamera();
 
             if (mCameraId == INVALID_CAMERA_ID) {
@@ -331,10 +334,10 @@ public class CameraHandler extends HandlerThread {
     }
 
     public void startOpenCamera(SurfaceHolder holder) {
-        if (isCameraNotOpened()) {
+//        if (isCameraNotOpened()) {
             setSurfaceHolder(holder);
             performCommand(CameraHandler.MSG_START);
-        }
+//        }
     }
 
     private int calcCameraRotation(int rotation) {
