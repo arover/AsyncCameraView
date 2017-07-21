@@ -11,6 +11,7 @@ import android.view.SurfaceHolder;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.SortedSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -41,10 +42,13 @@ public class CameraHandler extends HandlerThread {
     private Callback callback;
     private final Camera.CameraInfo mCameraInfo = new Camera.CameraInfo();
 
+    private final SizeMap mPreviewSizes = new SizeMap();
+    private final SizeMap mPictureSizes = new SizeMap();
+
     private Camera camera;
     private Handler handler;
     private boolean isPrepared;
-    private boolean mAutoFocus;
+    private boolean mAutoFocus = true;
     private Camera.Parameters mCameraParameters;
     private AtomicBoolean isPictureCaptureInProgress = new AtomicBoolean(false);
     private int mFacing = Camera.CameraInfo.CAMERA_FACING_BACK;
@@ -56,6 +60,9 @@ public class CameraHandler extends HandlerThread {
     private boolean setAfterOrientationInit;
     private boolean pendingStartPreview;
     private AtomicBoolean isOpenCamera = new AtomicBoolean(false);
+    private AspectRatio aspectRatio;
+    private int surfaceWidth;
+    private int surfaceHeight;
 
 
     public CameraHandler(Callback callback) {
@@ -191,6 +198,23 @@ public class CameraHandler extends HandlerThread {
                 }
                 camera.setPreviewDisplay(holder);
                 mCameraParameters = camera.getParameters();
+
+                // Supported preview sizes
+                mPreviewSizes.clear();
+                for (Camera.Size size : mCameraParameters.getSupportedPreviewSizes()) {
+                    Log.d(TAG,"Preview size w= "+size.width+",h="+size.height);
+                    mPreviewSizes.add(new Size(size.width, size.height));
+                }
+                // Supported picture sizes;
+                mPictureSizes.clear();
+                for (Camera.Size size : mCameraParameters.getSupportedPictureSizes()) {
+                    Log.d(TAG,"Picture size w= "+size.width+",h="+size.height);
+                    mPictureSizes.add(new Size(size.width, size.height));
+                }
+                // AspectRatio
+                if (aspectRatio == null) {
+                    aspectRatio = Config.DEFAULT_ASPECT_RATIO;
+                }
                 adjustCameraParameters();
                 camera.setDisplayOrientation(calcCameraRotation(mDisplayOrientation));
                 cameraStartPreview();
@@ -220,10 +244,99 @@ public class CameraHandler extends HandlerThread {
     }
 
     private void adjustCameraParameters() {
+        /*SortedSet<Size> sizes = mPreviewSizes.sizes(aspectRatio);
+        if (sizes == null) { // Not supported
+            aspectRatio = chooseAspectRatio();
+            sizes = mPreviewSizes.sizes(aspectRatio);
+        }
+        Size size = chooseOptimalSize(sizes);
+        final Camera.Size currentSize = mCameraParameters.getPictureSize();
+        if (currentSize.width != size.getWidth() || currentSize.height != size.getHeight()) {
+            // Largest picture size in this ratio
+            final Size pictureSize = mPictureSizes.sizes(aspectRatio).last();
+//            if (mShowingPreview) {
+//                mCamera.stopPreview();
+//            }
+            mCameraParameters.setPreviewSize(size.getWidth(), size.getHeight());
+            mCameraParameters.setPictureSize(pictureSize.getWidth(), pictureSize.getHeight());
+            mCameraParameters.setRotation(calcCameraRotation(mDisplayOrientation));
+            setAutoFocusInternal(mAutoFocus);
+            setFlashInternal(mFlash);
+            camera.setParameters(mCameraParameters);
+//            if (mShowingPreview) {
+//                mCamera.startPreview();
+//            }
+        }*/
+        SortedSet<Size> sizes = mPreviewSizes.sizes(aspectRatio);
+        Size previewsize = null;
+        for(Size size:sizes){
+            if(aspectRatio.matches(size)){
+                previewsize = size;
+            }
+        }
+        if(previewsize == null){
+            previewsize = sizes.first();
+        }
+//        Camera.Size previewsize = null;
+//        for (Camera.Size size : mCameraParameters.getSupportedPreviewSizes()) {
+////            Log.d(TAG,"size = "+size);
+//
+//            if(size.width/size.height == ){
+//                previewsize = size;
+//            }
+//        }
+//        if(previewsize == null && !mCameraParameters.getSupportedPreviewSizes().isEmpty()){
+//            previewsize = mCameraParameters.getSupportedPreviewSizes().get(0);
+//        }
+
+        final Size pictureSize = mPictureSizes.sizes(aspectRatio).last();
+        Log.d(TAG,"preview size "+previewsize);
+        Log.d(TAG,"pictureSize size "+pictureSize);
+        mCameraParameters.setPreviewSize(previewsize.getWidth(), previewsize.getHeight());
+        mCameraParameters.setPictureSize(pictureSize.getWidth(), pictureSize.getHeight());
+
         mCameraParameters.setRotation(calcCameraRotation(mDisplayOrientation));
         setAutoFocusInternal(mAutoFocus);
         setFlashInternal(mFlash);
         camera.setParameters(mCameraParameters);
+    }
+
+    @SuppressWarnings("SuspiciousNameCombination")
+    private Size chooseOptimalSize(SortedSet<Size> sizes) {
+//        if (!mPreview.isReady()) { // Not yet laid out
+//            return sizes.first(); // Return the smallest size
+//        }
+        int desiredWidth;
+        int desiredHeight;
+        final int surfaceWidth = this.surfaceWidth;
+        final int surfaceHeight = this.surfaceHeight;
+        if (mDisplayOrientation == 90 || mDisplayOrientation == 270) {
+            desiredWidth = surfaceHeight;
+            desiredHeight = surfaceWidth;
+        } else {
+            desiredWidth = surfaceWidth;
+            desiredHeight = surfaceHeight;
+        }
+        Size result = null;
+        for (Size size : sizes) { // Iterate from small to large
+            if (desiredWidth <= size.getWidth() && desiredHeight <= size.getHeight()) {
+                return size;
+
+            }
+            result = size;
+        }
+        return result;
+    }
+
+    private AspectRatio chooseAspectRatio() {
+        AspectRatio r = null;
+        for (AspectRatio ratio : mPreviewSizes.ratios()) {
+            r = ratio;
+            if (ratio.equals(Config.DEFAULT_ASPECT_RATIO)) {
+                return ratio;
+            }
+        }
+        return r;
     }
 
     /**
@@ -258,13 +371,17 @@ public class CameraHandler extends HandlerThread {
         }
         final List<String> modes = mCameraParameters.getSupportedFocusModes();
         if (autoFocus && modes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
+            Log.d(TAG,"setautofocus FOCUS_MODE_CONTINUOUS_PICTURE");
             mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
         } else if (modes.contains(Camera.Parameters.FOCUS_MODE_FIXED)) {
+            Log.d(TAG,"setautofocus FOCUS_MODE_FIXED");
             mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED);
         } else if (modes.contains(Camera.Parameters.FOCUS_MODE_INFINITY)) {
+            Log.d(TAG,"setautofocus FOCUS_MODE_INFINITY");
             mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_INFINITY);
         } else {
             mCameraParameters.setFocusMode(modes.get(0));
+            Log.d(TAG,"setautofocus "+modes.get(0));
         }
         return true;
     }
@@ -372,6 +489,16 @@ public class CameraHandler extends HandlerThread {
             return;
         }
         performCommand(MSG_STOP);
+    }
+
+    public void setSurfaceSize(int width, int height) {
+        surfaceWidth = width;
+        surfaceHeight = height;
+
+    }
+
+    public void setAspectRation(AspectRatio ratio) {
+        aspectRatio = ratio;
     }
 
     public interface Callback {

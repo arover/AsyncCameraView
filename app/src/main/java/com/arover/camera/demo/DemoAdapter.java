@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
+import com.arover.camera.AspectRatio;
 import com.arover.camera.CameraView;
 
 
@@ -74,7 +75,7 @@ class DemoAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>{
         private CameraView cameraView;
         public CameraViewHolder(View itemView) {
             super(itemView);
-            cameraView = (CameraView) itemView;
+            cameraView = (CameraView) itemView.findViewById(R.id.camera_view);
         }
     }
 

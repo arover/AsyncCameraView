@@ -80,6 +80,10 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
         mCallback = null;
     }
 
+    public void setAspectRatio(AspectRatio ratio) {
+        cameraHandler.setAspectRation(ratio);
+    }
+
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
         Log.d(TAG,"surfaceCreated");
@@ -91,6 +95,7 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         Log.d(TAG,"surfaceChanged format="+format+",width="+width+",height="+height);
+        cameraHandler.setSurfaceSize(width,height);
     }
 
     @Override
