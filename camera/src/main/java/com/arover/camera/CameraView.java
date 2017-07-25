@@ -8,6 +8,9 @@ import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+
 /**
  * @author minstrel
  *         created at 19/07/2017 15:12
@@ -19,10 +22,19 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
     private SurfaceHolder holder;
     private DisplayOrientationDetector mDisplayOrientationDetector;
     private CameraHandler cameraHandler;
+    private CameraHandler.CloseCallback mCloseCallback;
     private Callback mCallback;
+
+    public void addCloseCallback(CameraHandler.CloseCallback closeCallback) {
+        mCloseCallback = closeCallback;
+    }
 
     public interface Callback{
         void onPictureTaken(byte[] data);
+
+        void onCameraClose();
+
+        void onCameraOpen();
     }
 
     public CameraView(Context context) {
@@ -78,6 +90,10 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
 
     public void removeCallback(){
         mCallback = null;
+        mCloseCallback = null;
+    }
+    public void removeCloseCallback(){
+        mCloseCallback = null;
     }
 
     public void setAspectRatio(AspectRatio ratio) {
@@ -108,17 +124,28 @@ public class CameraView extends SurfaceView implements SurfaceHolder.Callback, C
     public void onCameraOpened() {
         Log.d(TAG,"onCameraOpened");
         cameraHandler.setSurfaceHolder(getHolder());
+        if(mCallback!=null) {
+            mCallback.onCameraOpen();
+        }
     }
 
     @Override
     public void onCameraClosed() {
         Log.d(TAG,"onCameraClosed");
+        if(mCallback!=null) {
+            mCallback.onCameraClose();
+        }
+
+        if(mCloseCallback!=null){
+            mCloseCallback.onCameraClosed();
+            mCloseCallback = null ;
+        }
     }
 
     @Override
     public void onPictureTaken(byte[] data) {
         Log.d(TAG,"onPictureTaken");
-        if(mCallback!=null){
+        if(mCallback!=null) {
             mCallback.onPictureTaken(data);
         }
     }

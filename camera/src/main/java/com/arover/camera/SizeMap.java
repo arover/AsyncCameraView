@@ -8,6 +8,7 @@ package com.arover.camera;
 
 import android.support.v4.util.ArrayMap;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -27,7 +28,7 @@ class SizeMap {
      */
     public boolean add(Size size) {
         for (AspectRatio ratio : mRatios.keySet()) {
-            if (ratio.matches(size)) {
+            if (ratio.about(size)) {
                 final SortedSet<Size> sizes = mRatios.get(ratio);
                 if (sizes.contains(size)) {
                     return false;
@@ -40,7 +41,7 @@ class SizeMap {
         // None of the existing ratio matches the provided size; add a new key
         SortedSet<Size> sizes = new TreeSet<>();
         sizes.add(size);
-        mRatios.put(AspectRatio.of(size.getWidth(), size.getHeight()), sizes);
+        mRatios.put(AspectRatio.compute(size.getWidth(), size.getHeight()), sizes);
         return true;
     }
 
@@ -49,7 +50,11 @@ class SizeMap {
     }
 
     SortedSet<Size> sizes(AspectRatio ratio) {
-        return mRatios.get(ratio);
+        SortedSet<Size> map = mRatios.get(ratio);
+        if(map==null){
+            return new TreeSet<>();
+        }
+        return map;
     }
 
     void clear() {
@@ -62,5 +67,16 @@ class SizeMap {
 
     public void remove(AspectRatio ratio) {
         mRatios.remove(ratio);
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder("");
+        for(Map.Entry<AspectRatio, SortedSet<Size>> item : mRatios.entrySet()){
+            for(Size size: item.getValue()){
+                builder.append(item.getKey().toString()).append("-").append(size.toString()).append("\n");
+            }
+        }
+        return builder.toString();
     }
 }

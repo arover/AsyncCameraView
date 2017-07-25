@@ -24,6 +24,7 @@ public class CameraHandler extends HandlerThread {
     private static final String TAG = "CameraHandler";
 
     private static final SparseArrayCompat<String> FLASH_MODES = new SparseArrayCompat<>();
+    private static final long REOPEN_DELAY = 200;
 
     static {
         FLASH_MODES.put(Config.FLASH_OFF, Camera.Parameters.FLASH_MODE_OFF);
@@ -63,6 +64,7 @@ public class CameraHandler extends HandlerThread {
     private AspectRatio aspectRatio;
     private int surfaceWidth;
     private int surfaceHeight;
+    private boolean mClosingCamera;
 
 
     public CameraHandler(Callback callback) {
@@ -80,8 +82,13 @@ public class CameraHandler extends HandlerThread {
             pendingStartPreview = true;
             return;
         }
-        Log.d(TAG, "performCommand " + command);
-        handler.sendEmptyMessage(command);
+        boolean sent;
+        if(mClosingCamera){
+            sent = handler.sendEmptyMessageDelayed(command, 200);
+        } else {
+            sent = handler.sendEmptyMessage(command);
+        }
+        Log.d(TAG, "performCommand " + command+",sent="+sent);
     }
 
     @Override
@@ -93,6 +100,7 @@ public class CameraHandler extends HandlerThread {
             @Override
             public void handleMessage(Message msg) {
                 super.handleMessage(msg);
+                Log.d(TAG,"handleMessage msg="+msg.what);
                 switch (msg.what) {
                     case MSG_START:
                         startCamera();
@@ -120,6 +128,7 @@ public class CameraHandler extends HandlerThread {
     }
 
     private void quitInternal() {
+        handler.removeCallbacksAndMessages(null);
         releaseCamera();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
             quitSafely();
@@ -171,8 +180,14 @@ public class CameraHandler extends HandlerThread {
     }
 
     private void startCamera() {
+        handler.removeMessages(MSG_START);
         if (!isOpenCamera.getAndSet(true)) {
-
+            Log.d(TAG,"startCamera....");
+            if(mClosingCamera){
+                Log.d(TAG,"mClosingCamera delay open");
+                handler.sendEmptyMessageDelayed(MSG_START, REOPEN_DELAY);
+                return;
+            }
             if (camera != null) {
                 Log.d(TAG, "camera opened ,return;");
                 isOpenCamera.set(false);
@@ -222,51 +237,34 @@ public class CameraHandler extends HandlerThread {
                 if (callback != null)
                     callback.onCameraOpened();
             } catch (Exception e) {
-                Log.e(TAG, "can't open camera");
+                Log.e(TAG, "can't open camera",e);
             } finally {
                 isOpenCamera.set(false);
             }
+        }else{
+            Log.d(TAG,"camera opening, ignore");
         }
     }
 
     private void releaseCamera() {
-        handler.removeCallbacksAndMessages(null);
+        mClosingCamera = true;
+        handler.removeMessages(MSG_STOP);
         if (camera != null) {
             Log.d(TAG,"releasing camera...");
             camera.setPreviewCallback(null);
             camera.stopPreview();
             camera.release();
             camera = null;
+
         }
+        mClosingCamera = false;
         Log.d(TAG, "camera closed");
         if (callback != null)
             callback.onCameraClosed();
     }
 
     private void adjustCameraParameters() {
-        /*SortedSet<Size> sizes = mPreviewSizes.sizes(aspectRatio);
-        if (sizes == null) { // Not supported
-            aspectRatio = chooseAspectRatio();
-            sizes = mPreviewSizes.sizes(aspectRatio);
-        }
-        Size size = chooseOptimalSize(sizes);
-        final Camera.Size currentSize = mCameraParameters.getPictureSize();
-        if (currentSize.width != size.getWidth() || currentSize.height != size.getHeight()) {
-            // Largest picture size in this ratio
-            final Size pictureSize = mPictureSizes.sizes(aspectRatio).last();
-//            if (mShowingPreview) {
-//                mCamera.stopPreview();
-//            }
-            mCameraParameters.setPreviewSize(size.getWidth(), size.getHeight());
-            mCameraParameters.setPictureSize(pictureSize.getWidth(), pictureSize.getHeight());
-            mCameraParameters.setRotation(calcCameraRotation(mDisplayOrientation));
-            setAutoFocusInternal(mAutoFocus);
-            setFlashInternal(mFlash);
-            camera.setParameters(mCameraParameters);
-//            if (mShowingPreview) {
-//                mCamera.startPreview();
-//            }
-        }*/
+
         SortedSet<Size> sizes = mPreviewSizes.sizes(aspectRatio);
         Size previewsize = null;
         for(Size size:sizes){
@@ -275,21 +273,17 @@ public class CameraHandler extends HandlerThread {
             }
         }
         if(previewsize == null){
-            previewsize = sizes.first();
+            previewsize = sizes.last();
         }
-//        Camera.Size previewsize = null;
-//        for (Camera.Size size : mCameraParameters.getSupportedPreviewSizes()) {
-////            Log.d(TAG,"size = "+size);
-//
-//            if(size.width/size.height == ){
-//                previewsize = size;
-//            }
-//        }
-//        if(previewsize == null && !mCameraParameters.getSupportedPreviewSizes().isEmpty()){
-//            previewsize = mCameraParameters.getSupportedPreviewSizes().get(0);
-//        }
 
-        final Size pictureSize = mPictureSizes.sizes(aspectRatio).last();
+        Log.d(TAG,"mPictureSizes :"+mPictureSizes);
+
+        SortedSet<Size> pictureMap = mPictureSizes.sizes(aspectRatio);
+        if(pictureMap.isEmpty()){
+            pictureMap = mPictureSizes.sizes(AspectRatio.of(4,3));
+        }
+        Size pictureSize = pictureMap.last();
+
         Log.d(TAG,"preview size "+previewsize);
         Log.d(TAG,"pictureSize size "+pictureSize);
         mCameraParameters.setPreviewSize(previewsize.getWidth(), previewsize.getHeight());
@@ -371,17 +365,13 @@ public class CameraHandler extends HandlerThread {
         }
         final List<String> modes = mCameraParameters.getSupportedFocusModes();
         if (autoFocus && modes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
-            Log.d(TAG,"setautofocus FOCUS_MODE_CONTINUOUS_PICTURE");
             mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
         } else if (modes.contains(Camera.Parameters.FOCUS_MODE_FIXED)) {
-            Log.d(TAG,"setautofocus FOCUS_MODE_FIXED");
             mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED);
         } else if (modes.contains(Camera.Parameters.FOCUS_MODE_INFINITY)) {
-            Log.d(TAG,"setautofocus FOCUS_MODE_INFINITY");
             mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_INFINITY);
         } else {
             mCameraParameters.setFocusMode(modes.get(0));
-            Log.d(TAG,"setautofocus "+modes.get(0));
         }
         return true;
     }
@@ -508,5 +498,9 @@ public class CameraHandler extends HandlerThread {
 
         void onPictureTaken(byte[] data);
 
+    }
+
+    public interface CloseCallback {
+        void onCameraClosed();
     }
 }

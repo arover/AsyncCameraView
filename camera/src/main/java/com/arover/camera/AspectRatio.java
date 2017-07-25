@@ -4,6 +4,7 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.support.annotation.NonNull;
 import android.support.v4.util.SparseArrayCompat;
+import android.util.Log;
 
 /**
  * @author minstrel
@@ -172,4 +173,25 @@ public class AspectRatio implements Comparable<AspectRatio>, Parcelable {
         }
     };
 
+
+    public static AspectRatio compute(int width, int height) {
+        float ratio = width/(height*1.0f);
+        Log.d("AspectRatio", "AspectRatio compute w="+width+",height="+height+",r="+ratio);
+        if( Float.compare(ratio,1.75f) > -1  && Float.compare(ratio, 1.80f) < 1){
+            return AspectRatio.of(16,9);
+        }
+//        if( ratio >= 1.31 && ratio <= 1.35){
+//            return AspectRatio.of(4,3);
+//        }
+        return AspectRatio.of(width,height);
+    }
+
+    public boolean about(Size size) {
+        float ratio = size.getWidth()/(size.getHeight()*1.0f);
+        if( Float.compare(ratio,1.75f) > -1  && Float.compare(ratio, 1.80f) < 1 && mX == 16 && mY == 9){
+            return true;
+        }
+
+        return matches(size);
+    }
 }
